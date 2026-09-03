@@ -1,0 +1,24 @@
+{
+  "name": "clipper",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "dev": "pnpm run build:packages && pnpm --parallel --filter \"./apps/*\" --filter \"./packages/*\" run dev",
+    "build": "pnpm run build:packages && pnpm --filter \"./apps/*\" run build",
+    "test": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run test",
+    "lint": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run lint",
+    "typecheck": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run typecheck",
+    "db:generate": "pnpm --filter @clipper/db run generate",
+    "db:migrate": "pnpm --filter @clipper/db run migrate",
+    "docker:up": "docker compose -f docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker-compose.yml down"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
