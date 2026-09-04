@@ -91,10 +91,15 @@ pnpm dev
 - Frontend: http://localhost:3000
 - API: http://localhost:3001/api/v1
 
-`pnpm dev` builds `packages/shared` once, then runs `apps/web` (Next.js), `apps/api`
-(Nest HTTP server, `--watch`), the worker (`tsx watch`), and a `tsc --watch` for
-`packages/shared`, all in parallel. If you change a shared Zod type while `pnpm dev` is
-running, the package rebuilds automatically; the API/worker watchers don't hot-reload on
+`pnpm dev` builds `packages/shared` once, then runs `apps/web` (Next.js), `apps/api`'s
+HTTP server and worker together (`apps/api`'s own `dev` script runs both via
+`concurrently` - the HTTP server via `nest start --watch`, the worker via
+`ts-node-dev --respawn`), and a `tsc --watch` for `packages/shared`, all in parallel.
+`ts-node-dev` rather than a faster esbuild-based runner is required for the worker
+specifically because NestJS's dependency injection relies on `emitDecoratorMetadata`,
+which esbuild does not support - using an esbuild-based watcher there silently breaks
+constructor injection. If you change a shared Zod type while `pnpm dev` is running, the
+package rebuilds automatically; the API/worker watchers don't hot-reload on
 `node_modules` changes, so restart `pnpm dev` after a shared-package change to pick it up.
 
 Environment variables are only loaded by `apps/api` (both entrypoints) - see
