@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CaptionSegmentSchema, CaptionStatusSchema, CaptionStyleSchema } from './caption.schema';
 
 export const JobStatusSchema = z.enum(['pending', 'downloading', 'processing', 'completed', 'failed']);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
@@ -11,8 +12,15 @@ export const ClipDtoSchema = z.object({
   endTime: z.number(),
   durationSeconds: z.number(),
   downloadUrl: z.string(),
+  streamUrl: z.string(),
   thumbnailUrl: z.string().nullable(),
   createdAt: z.string(),
+  captionStatus: CaptionStatusSchema,
+  captionStyle: CaptionStyleSchema.nullable(),
+  captionSegments: z.array(CaptionSegmentSchema).nullable(),
+  captionError: z.string().nullable(),
+  captionedDownloadUrl: z.string().nullable(),
+  captionedStreamUrl: z.string().nullable(),
 });
 export type ClipDto = z.infer<typeof ClipDtoSchema>;
 

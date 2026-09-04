@@ -66,7 +66,9 @@ with its own auth in front of it rather than exposing the API directly.
 - Node.js 20+
 - pnpm 9+ (`corepack enable` or `npm i -g pnpm`)
 - Docker (for Redis), or your own local Redis 7
-- `ffmpeg` and `ffprobe` on your `PATH` (the worker shells out to them directly)
+- `ffmpeg` and `ffprobe` on your `PATH` (the worker shells out to them directly). Needs
+  libass support for captions - standard distro/Homebrew builds have it; check with
+  `ffmpeg -filters | grep ass`
 - `yt-dlp` on your `PATH`, only if you want the YouTube URL import feature
   (`pip install yt-dlp`, or download the standalone binary from the
   [yt-dlp releases page](https://github.com/yt-dlp/yt-dlp/releases) - it also needs
@@ -157,6 +159,38 @@ alternative entry point into the same pipeline:
 Job status is `pending -> downloading -> processing -> completed | failed` for a URL
 import, vs. `pending -> processing -> completed | failed` for a direct file upload.
 
+## Captions
+
+There's no speech-to-text/transcription anywhere in this app - you type the caption
+lines and rough start/end times yourself, and pick one of three display templates:
+
+| Style | Look |
+|---|---|
+| `simple` | Plain bold white text, black outline, no background |
+| `karaoke` | Words highlight one at a time - evenly spaced across the line's declared duration, not audio-synced (there's no ASR to sync to) |
+| `highlighter-box` | Each line appears on a solid highlighter-colored box |
+
+`POST /clips/:id/captions` (`{ style, segments: [{ text, startTime, endTime }] }`) enqueues
+a `caption-burn` BullMQ job (its own queue, same async-never-blocks-HTTP pattern as clip
+generation) that:
+
+1. Builds an `.ass` subtitle file from the segments
+   (`apps/api/src/shared/ffmpeg/ass-subtitle-builder.ts`, pure function, unit-tested in
+   `apps/api/test/ass-subtitle-builder.spec.ts`) - karaoke timing splits each line's
+   duration across its words proportionally to word length. libass's native `\k`
+   karaoke tags and box-style (`BorderStyle=3`) rendering do the actual per-style
+   visual work; nothing here hand-rolls timed `drawtext` filters.
+2. Burns it in via `ffmpeg -vf ass=<file>` onto a **separate** output
+   (`clip-N-captioned.mp4`) - the original clip is never touched, so captions can be
+   changed or removed without re-running clip generation.
+3. Updates the clip's `captionStatus` (`none -> pending -> ready | failed`), which
+   `GET /jobs/:id` reflects; the frontend keeps polling past job completion as long as
+   any clip has `captionStatus: pending`.
+
+`DELETE /clips/:id/captions` clears the caption state and deletes the captioned file,
+reverting to the original. `GET /clips/:id/captioned/stream` and `.../captioned/download`
+serve the captioned version once `captionStatus` is `ready`.
+
 ## Tuning silence detection
 
 These are the knobs most likely to need iteration once you see real cut quality
@@ -184,6 +218,7 @@ storage/
   jobs/<jobId>/job.json        job status, progress, and embedded clip list
   jobs/<jobId>/source.<ext>    the uploaded/downloaded source video
   jobs/<jobId>/clips/          generated clip-N.mp4 + clip-N.jpg thumbnails
+                                 + clip-N-captioned.mp4 once captions are burned in
 ```
 
 All file access goes through `StorageDriver` (`apps/api/src/shared/storage/storage.interface.ts`).
@@ -213,6 +248,10 @@ pnpm test
 - `apps/api/test/job-store.spec.ts` exercises the JSON-file job/clip store against a real
   temp directory on disk (create, update, add clips, list ordering, delete cascading to
   the clips index, not-found handling) without mocking the filesystem.
+- `apps/api/test/ass-subtitle-builder.spec.ts` covers the caption-style ASS generation:
+  timestamp formatting, escaping (so caption text can never inject ASS override tags),
+  karaoke `\k` timing summing to the segment duration and weighting by word length, and
+  plain output for the non-karaoke styles.
 
 ## API summary
 
@@ -227,8 +266,12 @@ pnpm test
 | `GET /jobs/:id` | Job status, progress, and clips once available |
 | `GET /jobs/:id/download-all` | All clips for a job as a zip stream |
 | `DELETE /jobs/:id` | Delete a job, its clips, and its files |
-| `GET /clips/:id/download` | Stream a single clip |
+| `GET /clips/:id/download` | Download a clip |
+| `GET /clips/:id/stream` | Inline playback (Range-request support for scrubbing) |
 | `GET /clips/:id/thumbnail` | Stream a clip's thumbnail |
+| `POST /clips/:id/captions` | Set caption style + lines, enqueues the burn job |
+| `DELETE /clips/:id/captions` | Clear captions, delete the captioned file |
+| `GET /clips/:id/captioned/download` \| `.../captioned/stream` | Download/preview the captioned version once ready |
 
 All routes are prefixed with `/api/v1`. None of them require authentication - see
 [No auth](#no-auth) above.

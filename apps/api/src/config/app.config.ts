@@ -40,7 +40,7 @@ export const redisConfig = registerAs('redis', () => ({
 
 export const youtubeImportConfig = registerAs('youtubeImport', () => ({
   ytDlpPath: process.env.YT_DLP_PATH ?? 'yt-dlp',
-  metadataTimeoutMs: Number(process.env.YT_DLP_METADATA_TIMEOUT_MS ?? 20_000),
+  metadataTimeoutMs: Number(process.env.YT_DLP_METADATA_TIMEOUT_MS ?? 45_000),
   downloadTimeoutMs: Number(process.env.YT_DLP_DOWNLOAD_TIMEOUT_MS ?? 1_800_000),
   maxDurationSeconds: Number(process.env.YOUTUBE_IMPORT_MAX_DURATION_SECONDS ?? 7200),
 }));

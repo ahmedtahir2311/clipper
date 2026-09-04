@@ -11,7 +11,13 @@ import { ProcessingProducer } from './processing.producer';
  * block API requests.
  */
 @Module({
-  imports: [BullModule.registerQueue({ name: QUEUE_NAMES.CLIP_GENERATION }, { name: QUEUE_NAMES.SOURCE_DOWNLOAD })],
+  imports: [
+    BullModule.registerQueue(
+      { name: QUEUE_NAMES.CLIP_GENERATION },
+      { name: QUEUE_NAMES.SOURCE_DOWNLOAD },
+      { name: QUEUE_NAMES.CAPTION_BURN }
+    ),
+  ],
   providers: [ProcessingProducer],
   exports: [ProcessingProducer],
 })

@@ -1,5 +1,5 @@
 import type { ClipDto } from '@clipper/shared';
-import { ClipCard } from '@/components/molecules/clip-card';
+import { ClipCard } from '@/components/organisms/clip-card';
 
 export function ClipsGrid({ clips }: { clips: ClipDto[] }): JSX.Element {
   if (clips.length === 0) {
