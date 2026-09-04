@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import archiver from 'archiver';
 import type { Response } from 'express';
 import type { ClipDto, JobDto } from '@clipper/shared';
@@ -9,6 +9,8 @@ import type { ClipRecord, JobRecord } from '../../shared/store/job-record.types'
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
     private readonly jobStore: JobStoreService
@@ -35,7 +37,12 @@ export class JobsService {
 
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', (error) => {
-      throw error;
+      // Headers are already sent by this point (set above), so the best we
+      // can do is log and tear down the connection - throwing here would be
+      // an uncaught exception outside any request promise chain, which can
+      // crash the whole process.
+      this.logger.error(`Zip stream failed for job ${jobId}: ${error.message}`);
+      res.destroy(error);
     });
     archive.pipe(res);
 
