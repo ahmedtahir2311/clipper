@@ -1,16 +1,15 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq } from 'drizzle-orm';
 import type { Job as BullJob } from 'bullmq';
-import { clips, jobs, type Database } from '@clipper/db';
-import { DATABASE_CLIENT } from '../../database/database.module';
 import { AppError } from '../../shared/errors/app-error';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
 import { SelectClipWindows, type ClipSelectionConfig } from '../../shared/ffmpeg/clip-selection.util';
 import { SilenceDetectService } from '../../shared/ffmpeg/silence-detect.service';
 import { VideoProbeService } from '../../shared/ffmpeg/video-probe.service';
 import { VideoTransformService } from '../../shared/ffmpeg/video-transform.service';
+import { JobStoreService } from '../../shared/store/job-store.service';
+import type { JobRecordStatus } from '../../shared/store/job-record.types';
 import { QUEUE_NAMES, type ClipGenerationJobData } from './processing.constants';
 
 @Processor(QUEUE_NAMES.CLIP_GENERATION, { concurrency: 1 })
@@ -18,9 +17,9 @@ export class ClipGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(ClipGenerationProcessor.name);
 
   constructor(
-    @Inject(DATABASE_CLIENT) private readonly db: Database,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
     private readonly configService: ConfigService,
+    private readonly jobStore: JobStoreService,
     private readonly videoProbeService: VideoProbeService,
     private readonly silenceDetectService: SilenceDetectService,
     private readonly videoTransformService: VideoTransformService
@@ -32,8 +31,8 @@ export class ClipGenerationProcessor extends WorkerHost {
     const { jobId } = bullJob.data;
     this.logger.log(`Starting clip generation for job ${jobId}`);
 
-    const [jobRow] = await this.db.select().from(jobs).where(eq(jobs.id, jobId));
-    if (!jobRow) {
+    const jobRecord = await this.jobStore.GetJob(jobId);
+    if (!jobRecord) {
       this.logger.error(`Job ${jobId} not found, skipping`);
       return;
     }
@@ -44,7 +43,7 @@ export class ClipGenerationProcessor extends WorkerHost {
     const clipsDir = `jobs/${jobId}/clips`;
 
     try {
-      const absoluteSourcePath = this.storage.GetAbsolutePath(jobRow.sourcePath);
+      const absoluteSourcePath = this.storage.GetAbsolutePath(jobRecord.sourcePath);
       const probe = await this.videoProbeService.Probe(absoluteSourcePath);
 
       const noiseDb = this.configService.get<number>('clip.silenceNoiseDb', -30);
@@ -89,8 +88,7 @@ export class ClipGenerationProcessor extends WorkerHost {
         await this.videoTransformService.GenerateThumbnail(clipAbsolute, thumbnailAbsolute);
         await this.storage.Delete(trimRelativePath);
 
-        await this.db.insert(clips).values({
-          jobId,
+        await this.jobStore.AddClip(jobId, {
           sequence,
           filePath: clipRelativePath,
           thumbnailPath: thumbnailRelativePath,
@@ -117,12 +115,9 @@ export class ClipGenerationProcessor extends WorkerHost {
 
   private async SetJobStatus(
     jobId: string,
-    status: 'pending' | 'processing' | 'completed' | 'failed',
+    status: JobRecordStatus,
     fields: { progressCurrent?: number; progressTotal?: number; errorMessage?: string }
   ): Promise<void> {
-    await this.db
-      .update(jobs)
-      .set({ status, updatedAt: new Date(), ...fields })
-      .where(eq(jobs.id, jobId));
+    await this.jobStore.UpdateJob(jobId, { status, ...fields });
   }
 }

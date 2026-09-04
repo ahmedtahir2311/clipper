@@ -1,14 +1,12 @@
-import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ImportFromUrlSchema, InitiateUploadSchema } from '@clipper/shared';
-import { AuthGuard } from '../../shared/auth/auth.guard';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { ApiResponse } from '../../shared/utils/api-response.util';
 import { UploadChunkParamsSchema, UploadIdParamSchema } from './dto/upload-chunk-params.schema';
 import { UploadsService } from './uploads.service';
 
 @Controller('uploads')
-@UseGuards(AuthGuard)
 export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 

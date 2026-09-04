@@ -1,20 +1,11 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import {
-  appConfig,
-  authConfig,
-  cleanupConfig,
-  clipConfig,
-  ffmpegConfig,
-  redisConfig,
-  storageConfig,
-  youtubeImportConfig,
-} from '../../config/app.config';
+import { appConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig, youtubeImportConfig } from '../../config/app.config';
 import { ValidateEnv } from '../../config/env';
-import { DatabaseModule } from '../../database/database.module';
 import { FfmpegModule } from '../../shared/ffmpeg/ffmpeg.module';
 import { StorageModule } from '../../shared/storage/storage.module';
+import { StoreModule } from '../../shared/store/store.module';
 import { YtDlpModule } from '../../shared/yt-dlp/yt-dlp.module';
 import { CleanupProcessor } from '../cleanup/cleanup.processor';
 import { CleanupProducer } from '../cleanup/cleanup.producer';
@@ -33,7 +24,7 @@ import { SourceDownloadProcessor } from './source-download.processor';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: ValidateEnv,
-      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig, youtubeImportConfig],
+      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, cleanupConfig, redisConfig, youtubeImportConfig],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -45,8 +36,8 @@ import { SourceDownloadProcessor } from './source-download.processor';
       }),
     }),
     BullModule.registerQueue({ name: QUEUE_NAMES.SOURCE_DOWNLOAD }, { name: QUEUE_NAMES.CLIP_GENERATION }, { name: QUEUE_NAMES.CLEANUP }),
-    DatabaseModule,
     StorageModule,
+    StoreModule,
     FfmpegModule,
     YtDlpModule,
   ],
