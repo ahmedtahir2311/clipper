@@ -1,25 +1,39 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { appConfig, authConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig } from '../../config/app.config';
+import {
+  appConfig,
+  authConfig,
+  cleanupConfig,
+  clipConfig,
+  ffmpegConfig,
+  redisConfig,
+  storageConfig,
+  youtubeImportConfig,
+} from '../../config/app.config';
+import { ValidateEnv } from '../../config/env';
 import { DatabaseModule } from '../../database/database.module';
 import { FfmpegModule } from '../../shared/ffmpeg/ffmpeg.module';
 import { StorageModule } from '../../shared/storage/storage.module';
+import { YtDlpModule } from '../../shared/yt-dlp/yt-dlp.module';
 import { CleanupProcessor } from '../cleanup/cleanup.processor';
 import { CleanupProducer } from '../cleanup/cleanup.producer';
 import { QUEUE_NAMES } from './processing.constants';
+import { ProcessingProducer } from './processing.producer';
 import { ClipGenerationProcessor } from './processing.processor';
+import { SourceDownloadProcessor } from './source-download.processor';
 
 /**
  * Standalone worker process module - bootstrapped from worker.main.ts.
  * Deliberately excludes anything HTTP-related (controllers, guards) so this
- * process only ever does queue consumption + ffmpeg work.
+ * process only ever does queue consumption + ffmpeg/yt-dlp work.
  */
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig],
+      validate: ValidateEnv,
+      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig, youtubeImportConfig],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -30,11 +44,12 @@ import { ClipGenerationProcessor } from './processing.processor';
         },
       }),
     }),
-    BullModule.registerQueue({ name: QUEUE_NAMES.CLIP_GENERATION }, { name: QUEUE_NAMES.CLEANUP }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.SOURCE_DOWNLOAD }, { name: QUEUE_NAMES.CLIP_GENERATION }, { name: QUEUE_NAMES.CLEANUP }),
     DatabaseModule,
     StorageModule,
     FfmpegModule,
+    YtDlpModule,
   ],
-  providers: [ClipGenerationProcessor, CleanupProcessor, CleanupProducer],
+  providers: [ProcessingProducer, SourceDownloadProcessor, ClipGenerationProcessor, CleanupProcessor, CleanupProducer],
 })
 export class ProcessingWorkerModule {}

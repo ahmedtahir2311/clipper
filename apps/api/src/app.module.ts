@@ -2,7 +2,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
-import { appConfig, authConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig } from './config/app.config';
+import { appConfig, authConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig, youtubeImportConfig } from './config/app.config';
+import { ValidateEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './shared/auth/auth.module';
 import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
@@ -15,7 +16,8 @@ import { ClipsModule } from './features/clips/clips.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig],
+      validate: ValidateEnv,
+      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig, youtubeImportConfig],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],

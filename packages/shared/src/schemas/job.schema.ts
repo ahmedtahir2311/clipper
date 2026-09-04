@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const JobStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed']);
+export const JobStatusSchema = z.enum(['pending', 'downloading', 'processing', 'completed', 'failed']);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
 
 export const ClipDtoSchema = z.object({
@@ -48,6 +48,25 @@ export const UploadChunkParamsSchema = z.object({
 export const UploadChunkQuerySchema = z.object({
   chunkIndex: z.coerce.number().int().min(0),
 });
+
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be']);
+
+export const ImportFromUrlSchema = z.object({
+  url: z
+    .string()
+    .url()
+    .refine(
+      (value) => {
+        try {
+          return YOUTUBE_HOSTS.has(new URL(value).hostname.toLowerCase());
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Only youtube.com / youtu.be links are supported' }
+    ),
+});
+export type ImportFromUrlDto = z.infer<typeof ImportFromUrlSchema>;
 
 export const LoginSchema = z.object({
   username: z.string().min(1),

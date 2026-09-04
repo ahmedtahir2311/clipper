@@ -1,8 +1,13 @@
 # Auto-Clip Generator (MVP1)
 
-Upload a long-form video, get back 7-10 short vertical (9:16) clips picked with classical
-audio signal processing (ffmpeg `silencedetect`) - no AI/ML models involved. Preview and
-download the clips manually; there's no auto-posting or scheduling in this phase.
+Upload a long-form video - or import one from a YouTube URL - and get back 7-10 short
+vertical (9:16) clips picked with classical audio signal processing (ffmpeg
+`silencedetect`) - no AI/ML models involved. Preview and download the clips manually;
+there's no auto-posting or scheduling in this phase.
+
+> **YouTube import is for your own content.** Only paste a URL for a video you own or
+> otherwise have the rights to clip - downloading someone else's video may violate
+> YouTube's Terms of Service depending on how the clips are used.
 
 ## Stack
 
@@ -38,6 +43,10 @@ enqueues a BullMQ job and returns; all ffmpeg work happens in the worker process
 - pnpm 9+ (`corepack enable` or `npm i -g pnpm`)
 - Docker (for Postgres + Redis), or your own local Postgres 16 / Redis 7
 - `ffmpeg` and `ffprobe` on your `PATH` (the worker shells out to them directly)
+- `yt-dlp` on your `PATH`, only if you want the YouTube URL import feature
+  (`pip install yt-dlp`, or download the standalone binary from the
+  [yt-dlp releases page](https://github.com/yt-dlp/yt-dlp/releases) - it also needs
+  `ffmpeg` on `PATH` to merge separate video/audio streams, which you already have above)
 
 ## Setup
 
@@ -109,6 +118,24 @@ Every ffmpeg/ffprobe invocation runs with a hard timeout (`FFMPEG_TIMEOUT_MS`) a
 its full command line + exit code, so a malformed source video can't hang the worker and
 cut-quality issues can be traced back to the exact command that produced them.
 
+### Importing from a YouTube URL instead
+
+`POST /uploads/from-url` (only `youtube.com`/`youtu.be` hosts are accepted) is an
+alternative entry point into the same pipeline:
+
+1. The API synchronously fetches metadata (`yt-dlp --dump-single-json --skip-download`,
+   bounded by `YT_DLP_METADATA_TIMEOUT_MS`) to get the title and duration, rejects live
+   streams and anything longer than `YOUTUBE_IMPORT_MAX_DURATION_SECONDS`, creates the
+   `Job` row (`status: pending`, `source_url` set), and returns the `jobId` immediately.
+2. A `source-download` BullMQ job (separate queue from clip generation) downloads the
+   video in the worker (`status: downloading`, bounded by `YT_DLP_DOWNLOAD_TIMEOUT_MS`),
+   capped at 1080p/mp4 to keep files a reasonable size.
+3. Once downloaded, the job is handed to the same `clip-generation` queue the file-upload
+   path uses - steps 2-5 above are identical from there on.
+
+`Job.status` is `pending -> downloading -> processing -> completed | failed` for a URL
+import, vs. `pending -> processing -> completed | failed` for a direct file upload.
+
 ## Tuning silence detection
 
 These are the knobs most likely to need iteration once you see real cut quality
@@ -178,6 +205,7 @@ database.
 | `POST /uploads/:uploadId/chunks/:chunkIndex` | Upload one chunk (raw binary body) |
 | `GET /uploads/:uploadId/status` | Resume support - next expected chunk index |
 | `POST /uploads/:uploadId/complete` | Finalize upload, creates the `Job`, enqueues processing |
+| `POST /uploads/from-url` | Import from a YouTube URL, creates the `Job`, enqueues download |
 | `GET /jobs` | List jobs |
 | `GET /jobs/:id` | Job status, progress, and clips once available |
 | `GET /jobs/:id/download-all` | All clips for a job as a zip stream |
@@ -190,5 +218,6 @@ All routes are prefixed with `/api/v1` and require the session cookie except `/a
 ## Explicitly out of scope (MVP1)
 
 Auto-posting/scheduling to any platform, manual crop-region selection, multi-user
-roles, and cloud storage (the interface supports it, but only the local driver is
-implemented).
+roles, cloud storage (the interface supports it, but only the local driver is
+implemented), and importing from anything other than YouTube (no generic yt-dlp
+site-support surface is exposed - only `youtube.com`/`youtu.be` URLs are accepted).

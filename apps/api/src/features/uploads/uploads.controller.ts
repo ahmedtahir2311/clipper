@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { InitiateUploadSchema } from '@clipper/shared';
+import { ImportFromUrlSchema, InitiateUploadSchema } from '@clipper/shared';
 import { AuthGuard } from '../../shared/auth/auth.guard';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { ApiResponse } from '../../shared/utils/api-response.util';
@@ -17,6 +17,13 @@ export class UploadsController {
     const dto = InitiateUploadSchema.parse(body);
     const result = await this.uploadsService.InitiateUpload(dto);
     ApiResponse.Success(res, result, 'Upload initiated', 201);
+  }
+
+  @Post('from-url')
+  async ImportFromUrl(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+    const dto = ImportFromUrlSchema.parse(body);
+    const result = await this.uploadsService.ImportFromUrl(dto);
+    ApiResponse.Success(res, result, 'Import started, downloading video', 201);
   }
 
   @Get(':uploadId/status')
