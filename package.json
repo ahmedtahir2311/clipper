@@ -13,8 +13,6 @@
     "test": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run test",
     "lint": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run lint",
     "typecheck": "pnpm --filter \"./apps/*\" --filter \"./packages/*\" run typecheck",
-    "db:generate": "pnpm --filter @clipper/db run generate",
-    "db:migrate": "pnpm --filter @clipper/db run migrate",
     "docker:up": "docker compose -f docker-compose.yml up -d",
     "docker:down": "docker compose -f docker-compose.yml down"
   },

@@ -1,12 +1,10 @@
-import { Controller, Delete, Get, HttpCode, Param, Res, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { AuthGuard } from '../../shared/auth/auth.guard';
 import { ApiResponse } from '../../shared/utils/api-response.util';
 import { JobIdParamSchema } from './dto/job-id-param.schema';
 import { JobsService } from './jobs.service';
 
 @Controller('jobs')
-@UseGuards(AuthGuard)
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 

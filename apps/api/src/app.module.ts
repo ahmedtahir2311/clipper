@@ -2,12 +2,11 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
-import { appConfig, authConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig, youtubeImportConfig } from './config/app.config';
+import { appConfig, cleanupConfig, clipConfig, ffmpegConfig, redisConfig, storageConfig, youtubeImportConfig } from './config/app.config';
 import { ValidateEnv } from './config/env';
-import { DatabaseModule } from './database/database.module';
-import { AuthModule } from './shared/auth/auth.module';
 import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
 import { StorageModule } from './shared/storage/storage.module';
+import { StoreModule } from './shared/store/store.module';
 import { UploadsModule } from './features/uploads/uploads.module';
 import { JobsModule } from './features/jobs/jobs.module';
 import { ClipsModule } from './features/clips/clips.module';
@@ -17,7 +16,7 @@ import { ClipsModule } from './features/clips/clips.module';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: ValidateEnv,
-      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, authConfig, cleanupConfig, redisConfig, youtubeImportConfig],
+      load: [appConfig, storageConfig, clipConfig, ffmpegConfig, cleanupConfig, redisConfig, youtubeImportConfig],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -28,9 +27,8 @@ import { ClipsModule } from './features/clips/clips.module';
         },
       }),
     }),
-    DatabaseModule,
     StorageModule,
-    AuthModule,
+    StoreModule,
     UploadsModule,
     JobsModule,
     ClipsModule,

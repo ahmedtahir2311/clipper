@@ -1,8 +1,6 @@
-import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
-import { Inject } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { AuthGuard } from '../../shared/auth/auth.guard';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { ClipsService } from './clips.service';
@@ -10,7 +8,6 @@ import { ClipsService } from './clips.service';
 const ClipIdParamSchema = z.object({ id: z.string().uuid() });
 
 @Controller('clips')
-@UseGuards(AuthGuard)
 export class ClipsController {
   constructor(
     private readonly clipsService: ClipsService,

@@ -1,15 +1,12 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
-import { eq } from 'drizzle-orm';
-import { jobs } from '@clipper/db';
 import type { ImportFromUrlDto, InitiateUploadDto } from '@clipper/shared';
-import { DATABASE_CLIENT } from '../../database/database.module';
-import type { Database } from '@clipper/db';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
 import { VideoProbeService } from '../../shared/ffmpeg/video-probe.service';
 import { YtDlpService } from '../../shared/yt-dlp/yt-dlp.service';
+import { JobStoreService } from '../../shared/store/job-store.service';
 import { ProcessingProducer } from '../processing/processing.producer';
 import { MIME_TO_EXTENSION, type UploadMeta } from './uploads.types';
 
@@ -20,11 +17,11 @@ const UPLOAD_TMP_PATH = (uploadId: string): string => `${UPLOAD_DIR(uploadId)}/s
 @Injectable()
 export class UploadsService {
   constructor(
-    @Inject(DATABASE_CLIENT) private readonly db: Database,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
     private readonly configService: ConfigService,
     private readonly videoProbeService: VideoProbeService,
     private readonly ytDlpService: YtDlpService,
+    private readonly jobStore: JobStoreService,
     private readonly processingProducer: ProcessingProducer
   ) {}
 
@@ -91,14 +88,10 @@ export class UploadsService {
     }
 
     const extension = MIME_TO_EXTENSION[meta.mimeType];
-    const [job] = await this.db
-      .insert(jobs)
-      .values({
-        status: 'pending',
-        sourceFilename: meta.filename,
-        sourcePath: '',
-      })
-      .returning();
+    const job = await this.jobStore.CreateJob({
+      sourceFilename: meta.filename,
+      sourcePath: '',
+    });
 
     const finalRelativePath = `jobs/${job.id}/source.${extension}`;
     await this.storage.Move(UPLOAD_TMP_PATH(uploadId), finalRelativePath);
@@ -106,10 +99,10 @@ export class UploadsService {
 
     const probe = await this.videoProbeService.Probe(this.storage.GetAbsolutePath(finalRelativePath));
 
-    await this.db
-      .update(jobs)
-      .set({ sourcePath: finalRelativePath, durationSeconds: Math.round(probe.durationSeconds), updatedAt: new Date() })
-      .where(eq(jobs.id, job.id));
+    await this.jobStore.UpdateJob(job.id, {
+      sourcePath: finalRelativePath,
+      durationSeconds: Math.round(probe.durationSeconds),
+    });
 
     await this.processingProducer.EnqueueClipGeneration(job.id);
 
@@ -144,16 +137,12 @@ export class UploadsService {
       );
     }
 
-    const [job] = await this.db
-      .insert(jobs)
-      .values({
-        status: 'pending',
-        sourceFilename: metadata.title,
-        sourcePath: '',
-        sourceUrl: dto.url,
-        durationSeconds: Math.round(metadata.durationSeconds),
-      })
-      .returning();
+    const job = await this.jobStore.CreateJob({
+      sourceFilename: metadata.title,
+      sourcePath: '',
+      sourceUrl: dto.url,
+      durationSeconds: Math.round(metadata.durationSeconds),
+    });
 
     await this.processingProducer.EnqueueSourceDownload(job.id, dto.url);
 

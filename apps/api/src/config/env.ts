@@ -3,17 +3,11 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
 
   API_PORT: z.coerce.number().int().positive().default(3001),
   API_CORS_ORIGIN: z.string().default('http://localhost:3000'),
-
-  SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
-  ADMIN_USERNAME: z.string().min(1).default('admin'),
-  ADMIN_PASSWORD_HASH: z.string().min(1, 'ADMIN_PASSWORD_HASH is required'),
 
   STORAGE_DRIVER: z.enum(['local']).default('local'),
   STORAGE_ROOT: z.string().default('./storage'),

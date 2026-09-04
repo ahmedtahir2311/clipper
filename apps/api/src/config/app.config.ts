@@ -28,12 +28,6 @@ export const ffmpegConfig = registerAs('ffmpeg', () => ({
   timeoutMs: Number(process.env.FFMPEG_TIMEOUT_MS ?? 600_000),
 }));
 
-export const authConfig = registerAs('auth', () => ({
-  sessionSecret: process.env.SESSION_SECRET ?? '',
-  adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
-  adminPasswordHash: process.env.ADMIN_PASSWORD_HASH ?? '',
-}));
-
 export const cleanupConfig = registerAs('cleanup', () => ({
   retentionDays: Number(process.env.CLEANUP_RETENTION_DAYS ?? 7),
   cron: process.env.CLEANUP_CRON ?? '0 3 * * *',

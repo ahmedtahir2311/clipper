@@ -1,44 +1,32 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
 import archiver from 'archiver';
 import type { Response } from 'express';
-import { clips, jobs, type Database } from '@clipper/db';
 import type { ClipDto, JobDto } from '@clipper/shared';
-import { DATABASE_CLIENT } from '../../database/database.module';
-import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
+import { JobStoreService } from '../../shared/store/job-store.service';
+import { AppError, ErrorCodes } from '../../shared/errors/app-error';
+import type { ClipRecord, JobRecord } from '../../shared/store/job-record.types';
 
 @Injectable()
 export class JobsService {
   constructor(
-    @Inject(DATABASE_CLIENT) private readonly db: Database,
-    @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver
+    @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
+    private readonly jobStore: JobStoreService
   ) {}
 
   async ListJobs(): Promise<JobDto[]> {
-    const rows = await this.db.select().from(jobs).orderBy(desc(jobs.createdAt));
-    return rows.map((row) => this.ToJobDto(row));
+    const records = await this.jobStore.ListJobs();
+    return records.map((record) => this.ToJobDto(record));
   }
 
   async GetJob(jobId: string): Promise<JobDto> {
-    const [row] = await this.db.select().from(jobs).where(eq(jobs.id, jobId));
-    if (!row) {
-      throw new AppError(ErrorCodes.NOT_FOUND, `Job ${jobId} not found`, 404);
-    }
-
-    const clipRows = await this.db.select().from(clips).where(eq(clips.jobId, jobId)).orderBy(clips.sequence);
-
-    return this.ToJobDto(row, clipRows.map((clip) => this.ToClipDto(clip)));
+    const record = await this.jobStore.RequireJob(jobId);
+    return this.ToJobDto(record, record.clips.map((clip) => this.ToClipDto(record.id, clip)));
   }
 
   async StreamAllClipsAsZip(jobId: string, res: Response): Promise<void> {
-    const [row] = await this.db.select().from(jobs).where(eq(jobs.id, jobId));
-    if (!row) {
-      throw new AppError(ErrorCodes.NOT_FOUND, `Job ${jobId} not found`, 404);
-    }
-
-    const clipRows = await this.db.select().from(clips).where(eq(clips.jobId, jobId)).orderBy(clips.sequence);
-    if (clipRows.length === 0) {
+    const record = await this.jobStore.RequireJob(jobId);
+    if (record.clips.length === 0) {
       throw new AppError(ErrorCodes.NOT_FOUND, `Job ${jobId} has no clips yet`, 404);
     }
 
@@ -51,7 +39,7 @@ export class JobsService {
     });
     archive.pipe(res);
 
-    for (const clip of clipRows) {
+    for (const clip of record.clips) {
       archive.append(this.storage.ReadStream(clip.filePath), { name: `clip-${clip.sequence}.mp4` });
     }
 
@@ -59,44 +47,39 @@ export class JobsService {
   }
 
   async DeleteJob(jobId: string): Promise<void> {
-    const [row] = await this.db.select().from(jobs).where(eq(jobs.id, jobId));
-    if (!row) {
-      throw new AppError(ErrorCodes.NOT_FOUND, `Job ${jobId} not found`, 404);
-    }
-
-    await this.storage.DeleteDirectory(`jobs/${jobId}`);
-    await this.db.delete(jobs).where(eq(jobs.id, jobId));
+    await this.jobStore.RequireJob(jobId);
+    await this.jobStore.DeleteJob(jobId);
   }
 
-  private ToJobDto(row: typeof jobs.$inferSelect, clipDtos?: ClipDto[]): JobDto {
+  private ToJobDto(record: JobRecord, clipDtos?: ClipDto[]): JobDto {
     return {
-      id: row.id,
-      status: row.status,
-      sourceFilename: row.sourceFilename,
-      durationSeconds: row.durationSeconds,
+      id: record.id,
+      status: record.status,
+      sourceFilename: record.sourceFilename,
+      durationSeconds: record.durationSeconds,
       progress: {
-        current: row.progressCurrent,
-        total: row.progressTotal,
-        label: this.FormatProgressLabel(row.status, row.progressCurrent, row.progressTotal),
+        current: record.progressCurrent,
+        total: record.progressTotal,
+        label: this.FormatProgressLabel(record.status, record.progressCurrent, record.progressTotal),
       },
-      errorMessage: row.errorMessage,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
+      errorMessage: record.errorMessage,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
       ...(clipDtos ? { clips: clipDtos } : {}),
     };
   }
 
-  private ToClipDto(row: typeof clips.$inferSelect): ClipDto {
+  private ToClipDto(jobId: string, clip: ClipRecord): ClipDto {
     return {
-      id: row.id,
-      jobId: row.jobId,
-      sequence: row.sequence,
-      startTime: row.startTime,
-      endTime: row.endTime,
-      durationSeconds: row.durationSeconds,
-      downloadUrl: `/api/v1/clips/${row.id}/download`,
-      thumbnailUrl: row.thumbnailPath ? `/api/v1/clips/${row.id}/thumbnail` : null,
-      createdAt: row.createdAt.toISOString(),
+      id: clip.id,
+      jobId,
+      sequence: clip.sequence,
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      durationSeconds: clip.durationSeconds,
+      downloadUrl: `/api/v1/clips/${clip.id}/download`,
+      thumbnailUrl: clip.thumbnailPath ? `/api/v1/clips/${clip.id}/thumbnail` : null,
+      createdAt: clip.createdAt,
     };
   }
 
