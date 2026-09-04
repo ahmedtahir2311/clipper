@@ -7,6 +7,7 @@ import { FfmpegModule } from '../../shared/ffmpeg/ffmpeg.module';
 import { StorageModule } from '../../shared/storage/storage.module';
 import { StoreModule } from '../../shared/store/store.module';
 import { YtDlpModule } from '../../shared/yt-dlp/yt-dlp.module';
+import { CaptionBurnProcessor } from '../captions/caption-burn.processor';
 import { CleanupProcessor } from '../cleanup/cleanup.processor';
 import { CleanupProducer } from '../cleanup/cleanup.producer';
 import { QUEUE_NAMES } from './processing.constants';
@@ -35,12 +36,24 @@ import { SourceDownloadProcessor } from './source-download.processor';
         },
       }),
     }),
-    BullModule.registerQueue({ name: QUEUE_NAMES.SOURCE_DOWNLOAD }, { name: QUEUE_NAMES.CLIP_GENERATION }, { name: QUEUE_NAMES.CLEANUP }),
+    BullModule.registerQueue(
+      { name: QUEUE_NAMES.SOURCE_DOWNLOAD },
+      { name: QUEUE_NAMES.CLIP_GENERATION },
+      { name: QUEUE_NAMES.CAPTION_BURN },
+      { name: QUEUE_NAMES.CLEANUP }
+    ),
     StorageModule,
     StoreModule,
     FfmpegModule,
     YtDlpModule,
   ],
-  providers: [ProcessingProducer, SourceDownloadProcessor, ClipGenerationProcessor, CleanupProcessor, CleanupProducer],
+  providers: [
+    ProcessingProducer,
+    SourceDownloadProcessor,
+    ClipGenerationProcessor,
+    CaptionBurnProcessor,
+    CleanupProcessor,
+    CleanupProducer,
+  ],
 })
 export class ProcessingWorkerModule {}

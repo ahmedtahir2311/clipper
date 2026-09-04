@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import type { CaptionSegment, CaptionStyle } from '@clipper/shared';
 import { AppError, ErrorCodes } from '../errors/app-error';
 import { STORAGE_DRIVER, type StorageDriver } from '../storage/storage.interface';
 import type { ClipRecord, JobRecord, NewClipRecord, NewJobRecord } from './job-record.types';
@@ -100,7 +101,16 @@ export class JobStoreService {
 
   async AddClip(jobId: string, data: NewClipRecord): Promise<ClipRecord> {
     const job = await this.RequireJob(jobId);
-    const clip: ClipRecord = { id: uuidv4(), createdAt: new Date().toISOString(), ...data };
+    const clip: ClipRecord = {
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+      captionStatus: 'none',
+      captionStyle: null,
+      captionSegments: null,
+      captionedFilePath: null,
+      captionError: null,
+      ...data,
+    };
 
     job.clips.push(clip);
     job.updatedAt = new Date().toISOString();
@@ -111,6 +121,48 @@ export class JobStoreService {
     await this.WriteClipsIndex(index);
 
     return clip;
+  }
+
+  async SetClipCaptionPending(clipId: string, style: CaptionStyle, segments: CaptionSegment[]): Promise<ClipRecord> {
+    return this.UpdateClip(clipId, {
+      captionStatus: 'pending',
+      captionStyle: style,
+      captionSegments: segments,
+      captionError: null,
+    });
+  }
+
+  async SetClipCaptionReady(clipId: string, captionedFilePath: string): Promise<ClipRecord> {
+    return this.UpdateClip(clipId, { captionStatus: 'ready', captionedFilePath, captionError: null });
+  }
+
+  async SetClipCaptionFailed(clipId: string, errorMessage: string): Promise<ClipRecord> {
+    return this.UpdateClip(clipId, { captionStatus: 'failed', captionError: errorMessage });
+  }
+
+  async ClearClipCaptions(clipId: string): Promise<ClipRecord> {
+    return this.UpdateClip(clipId, {
+      captionStatus: 'none',
+      captionStyle: null,
+      captionSegments: null,
+      captionedFilePath: null,
+      captionError: null,
+    });
+  }
+
+  private async UpdateClip(clipId: string, patch: Partial<Omit<ClipRecord, 'id' | 'createdAt'>>): Promise<ClipRecord> {
+    const found = await this.FindClip(clipId);
+    if (!found) {
+      throw new AppError(ErrorCodes.NOT_FOUND, `Clip ${clipId} not found`, 404);
+    }
+
+    const { job, clip } = found;
+    const updatedClip: ClipRecord = { ...clip, ...patch };
+    job.clips = job.clips.map((c) => (c.id === clipId ? updatedClip : c));
+    job.updatedAt = new Date().toISOString();
+    await this.WriteJob(job);
+
+    return updatedClip;
   }
 
   async FindClip(clipId: string): Promise<{ job: JobRecord; clip: ClipRecord } | null> {

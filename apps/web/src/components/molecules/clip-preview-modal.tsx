@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect } from 'react';
-import type { ClipDto } from '@clipper/shared';
 import { API_BASE_URL } from '@/config/constants';
 
 interface ClipPreviewModalProps {
-  clip: ClipDto;
+  streamUrl: string;
+  label: string;
   onClose: () => void;
 }
 
-export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps): JSX.Element {
+export function ClipPreviewModal({ streamUrl, label, onClose }: ClipPreviewModalProps): JSX.Element {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
       if (e.key === 'Escape') onClose();
@@ -24,7 +24,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps): JSX.
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`Preview of clip ${clip.sequence}`}
+      aria-label={label}
     >
       <div className="relative max-h-full max-w-sm" onClick={(e) => e.stopPropagation()}>
         <button
@@ -35,12 +35,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps): JSX.
           Close ✕
         </button>
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video
-          src={`${API_BASE_URL}${clip.streamUrl}`}
-          controls
-          autoPlay
-          className="max-h-[85vh] w-full rounded-lg bg-black"
-        />
+        <video src={`${API_BASE_URL}${streamUrl}`} controls autoPlay className="max-h-[85vh] w-full rounded-lg bg-black" />
       </div>
     </div>
   );

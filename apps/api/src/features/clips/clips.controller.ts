@@ -1,7 +1,8 @@
-import { Controller, Get, Inject, Logger, Param, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Logger, Param, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { Readable } from 'node:stream';
 import { z } from 'zod';
+import { SetCaptionsSchema } from '@clipper/shared';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
 import { ApiResponse } from '../../shared/utils/api-response.util';
@@ -23,23 +24,74 @@ export class ClipsController {
   async Download(@Param() params: unknown, @Res() res: Response): Promise<void> {
     const { id } = ClipIdParamSchema.parse(params);
     const clip = await this.clipsService.GetClip(id);
-
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="clip-${clip.sequence}.mp4"`);
-    this.PipeToResponse(this.storage.ReadStream(clip.filePath), res, `Streaming clip ${id}`);
+    this.SendAttachment(clip.filePath, `clip-${clip.sequence}.mp4`, res, `Streaming clip ${id}`);
   }
 
-  /**
-   * Inline playback for the browser's <video> element - unlike /download,
-   * this never sets Content-Disposition: attachment (which some browsers
-   * refuse to play inline) and supports HTTP Range requests so scrubbing
-   * doesn't require re-downloading the whole clip.
-   */
   @Get(':id/stream')
   async Stream(@Param() params: unknown, @Req() req: Request, @Res() res: Response): Promise<void> {
     const { id } = ClipIdParamSchema.parse(params);
     const clip = await this.clipsService.GetClip(id);
-    const fileSize = await this.storage.GetFileSize(clip.filePath);
+    await this.StreamVideoFile(clip.filePath, req, res, `Streaming clip ${id}`);
+  }
+
+  @Get(':id/thumbnail')
+  async Thumbnail(@Param() params: unknown, @Res() res: Response): Promise<void> {
+    const { id } = ClipIdParamSchema.parse(params);
+    const clip = await this.clipsService.GetClip(id);
+
+    if (!clip.thumbnailPath) {
+      throw new AppError(ErrorCodes.NOT_FOUND, `Clip ${id} has no thumbnail`, 404);
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    this.PipeToResponse(this.storage.ReadStream(clip.thumbnailPath), res, `Streaming thumbnail for clip ${id}`);
+  }
+
+  @Post(':id/captions')
+  async SetCaptions(@Param() params: unknown, @Body() body: unknown, @Res() res: Response): Promise<void> {
+    const { id } = ClipIdParamSchema.parse(params);
+    const dto = SetCaptionsSchema.parse(body);
+    const clip = await this.clipsService.SetCaptions(id, dto);
+    ApiResponse.Success(res, clip, 'Caption burn started', 202);
+  }
+
+  @Delete(':id/captions')
+  @HttpCode(200)
+  async ClearCaptions(@Param() params: unknown, @Res() res: Response): Promise<void> {
+    const { id } = ClipIdParamSchema.parse(params);
+    const clip = await this.clipsService.ClearCaptions(id);
+    ApiResponse.Success(res, clip, 'Captions cleared');
+  }
+
+  @Get(':id/captioned/download')
+  async DownloadCaptioned(@Param() params: unknown, @Res() res: Response): Promise<void> {
+    const { id } = ClipIdParamSchema.parse(params);
+    const clip = await this.clipsService.GetCaptionedClip(id);
+    // GetCaptionedClip guarantees captionedFilePath is set when status is 'ready'.
+    this.SendAttachment(clip.captionedFilePath as string, `clip-${clip.sequence}-captioned.mp4`, res, `Streaming captioned clip ${id}`);
+  }
+
+  @Get(':id/captioned/stream')
+  async StreamCaptioned(@Param() params: unknown, @Req() req: Request, @Res() res: Response): Promise<void> {
+    const { id } = ClipIdParamSchema.parse(params);
+    const clip = await this.clipsService.GetCaptionedClip(id);
+    await this.StreamVideoFile(clip.captionedFilePath as string, req, res, `Streaming captioned clip ${id}`);
+  }
+
+  private SendAttachment(filePath: string, downloadFilename: string, res: Response, errorContext: string): void {
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+    this.PipeToResponse(this.storage.ReadStream(filePath), res, errorContext);
+  }
+
+  /**
+   * Inline playback for the browser's <video> element - unlike SendAttachment,
+   * this never sets Content-Disposition: attachment (which some browsers
+   * refuse to play inline) and supports HTTP Range requests so scrubbing
+   * doesn't require re-downloading the whole clip.
+   */
+  private async StreamVideoFile(filePath: string, req: Request, res: Response, errorContext: string): Promise<void> {
+    const fileSize = await this.storage.GetFileSize(filePath);
 
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Accept-Ranges', 'bytes');
@@ -47,7 +99,7 @@ export class ClipsController {
     const rangeHeader = req.headers.range;
     if (!rangeHeader) {
       res.setHeader('Content-Length', fileSize);
-      this.PipeToResponse(this.storage.ReadStream(clip.filePath), res, `Streaming clip ${id}`);
+      this.PipeToResponse(this.storage.ReadStream(filePath), res, errorContext);
       return;
     }
 
@@ -64,20 +116,7 @@ export class ClipsController {
     res.status(206);
     res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
     res.setHeader('Content-Length', end - start + 1);
-    this.PipeToResponse(this.storage.ReadStream(clip.filePath, { start, end }), res, `Streaming clip ${id} range ${start}-${end}`);
-  }
-
-  @Get(':id/thumbnail')
-  async Thumbnail(@Param() params: unknown, @Res() res: Response): Promise<void> {
-    const { id } = ClipIdParamSchema.parse(params);
-    const clip = await this.clipsService.GetClip(id);
-
-    if (!clip.thumbnailPath) {
-      throw new AppError(ErrorCodes.NOT_FOUND, `Clip ${id} has no thumbnail`, 404);
-    }
-
-    res.setHeader('Content-Type', 'image/jpeg');
-    this.PipeToResponse(this.storage.ReadStream(clip.thumbnailPath), res, `Streaming thumbnail for clip ${id}`);
+    this.PipeToResponse(this.storage.ReadStream(filePath, { start, end }), res, `${errorContext} range ${start}-${end}`);
   }
 
   /**

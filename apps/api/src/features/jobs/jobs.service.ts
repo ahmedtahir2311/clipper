@@ -5,7 +5,8 @@ import type { ClipDto, JobDto } from '@clipper/shared';
 import { STORAGE_DRIVER, type StorageDriver } from '../../shared/storage/storage.interface';
 import { JobStoreService } from '../../shared/store/job-store.service';
 import { AppError, ErrorCodes } from '../../shared/errors/app-error';
-import type { ClipRecord, JobRecord } from '../../shared/store/job-record.types';
+import { ToClipDto } from '../../shared/dto/clip.mapper';
+import type { JobRecord } from '../../shared/store/job-record.types';
 
 @Injectable()
 export class JobsService {
@@ -23,7 +24,7 @@ export class JobsService {
 
   async GetJob(jobId: string): Promise<JobDto> {
     const record = await this.jobStore.RequireJob(jobId);
-    return this.ToJobDto(record, record.clips.map((clip) => this.ToClipDto(record.id, clip)));
+    return this.ToJobDto(record, record.clips.map((clip) => ToClipDto(record.id, clip)));
   }
 
   async StreamAllClipsAsZip(jobId: string, res: Response): Promise<void> {
@@ -73,24 +74,6 @@ export class JobsService {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       ...(clipDtos ? { clips: clipDtos } : {}),
-    };
-  }
-
-  private ToClipDto(jobId: string, clip: ClipRecord): ClipDto {
-    return {
-      id: clip.id,
-      jobId,
-      sequence: clip.sequence,
-      startTime: clip.startTime,
-      endTime: clip.endTime,
-      durationSeconds: clip.durationSeconds,
-      // Relative to the API base URL, which already includes the /api/v1
-      // prefix on the frontend (see apps/web/src/config/constants.ts) - do
-      // not prefix with /api/v1 here or clients double it up.
-      downloadUrl: `/clips/${clip.id}/download`,
-      streamUrl: `/clips/${clip.id}/stream`,
-      thumbnailUrl: clip.thumbnailPath ? `/clips/${clip.id}/thumbnail` : null,
-      createdAt: clip.createdAt,
     };
   }
 

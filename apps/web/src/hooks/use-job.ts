@@ -8,8 +8,13 @@ export function UseJob(id: string) {
     queryFn: () => JobsService.GetById(id),
     enabled: !!id,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === 'completed' || status === 'failed' ? false : JOB_POLL_INTERVAL_MS;
+      const job = query.state.data;
+      if (!job) return JOB_POLL_INTERVAL_MS;
+
+      const jobStillRunning = job.status !== 'completed' && job.status !== 'failed';
+      const captionsStillBurning = job.clips?.some((clip) => clip.captionStatus === 'pending') ?? false;
+
+      return jobStillRunning || captionsStillBurning ? JOB_POLL_INTERVAL_MS : false;
     },
   });
 }
