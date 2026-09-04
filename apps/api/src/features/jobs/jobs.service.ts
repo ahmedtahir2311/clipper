@@ -84,8 +84,11 @@ export class JobsService {
       startTime: clip.startTime,
       endTime: clip.endTime,
       durationSeconds: clip.durationSeconds,
-      downloadUrl: `/api/v1/clips/${clip.id}/download`,
-      thumbnailUrl: clip.thumbnailPath ? `/api/v1/clips/${clip.id}/thumbnail` : null,
+      // Relative to the API base URL, which already includes the /api/v1
+      // prefix on the frontend (see apps/web/src/config/constants.ts) - do
+      // not prefix with /api/v1 here or clients double it up.
+      downloadUrl: `/clips/${clip.id}/download`,
+      thumbnailUrl: clip.thumbnailPath ? `/clips/${clip.id}/thumbnail` : null,
       createdAt: clip.createdAt,
     };
   }
