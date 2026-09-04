@@ -1,13 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { spawn } from 'node:child_process';
-import { AppError, ErrorCodes } from '../errors/app-error';
+import { RunProcess, type ProcessResult } from '../process/run-process.util';
 
-export interface ProcessResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
+export type { ProcessResult };
 
 /**
  * Thin wrapper around ffmpeg/ffprobe child processes.
@@ -36,61 +31,10 @@ export class FfmpegService {
   }
 
   async RunFfmpeg(args: string[], timeoutMsOverride?: number): Promise<ProcessResult> {
-    return this.RunProcess(this.ffmpegPath, args, timeoutMsOverride ?? this.timeoutMs);
+    return RunProcess(this.ffmpegPath, args, timeoutMsOverride ?? this.timeoutMs, this.logger);
   }
 
   async RunFfprobe(args: string[], timeoutMsOverride?: number): Promise<ProcessResult> {
-    return this.RunProcess(this.ffprobePath, args, timeoutMsOverride ?? this.timeoutMs);
-  }
-
-  private RunProcess(command: string, args: string[], timeoutMs: number): Promise<ProcessResult> {
-    const invocation = `${command} ${args.join(' ')}`;
-
-    return new Promise((resolvePromise, reject) => {
-      const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        this.logger.error(`Timed out after ${timeoutMs}ms, killing process: ${invocation}`);
-        child.kill('SIGKILL');
-      }, timeoutMs);
-
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-
-      child.stderr.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-
-      child.on('error', (error) => {
-        clearTimeout(timer);
-        this.logger.error(`Failed to spawn: ${invocation} - ${error.message}`);
-        reject(new AppError(ErrorCodes.FFMPEG_FAILED, `Failed to start ${command}: ${error.message}`, 500));
-      });
-
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        const exitCode = code ?? -1;
-        this.logger.log(`[exit ${exitCode}] ${invocation}`);
-
-        if (timedOut) {
-          reject(new AppError(ErrorCodes.FFMPEG_FAILED, `${command} timed out after ${timeoutMs}ms`, 500));
-          return;
-        }
-
-        if (exitCode !== 0) {
-          this.logger.error(`stderr for failed invocation: ${stderr.slice(-2000)}`);
-          reject(new AppError(ErrorCodes.FFMPEG_FAILED, `${command} exited with code ${exitCode}`, 500));
-          return;
-        }
-
-        resolvePromise({ stdout, stderr, exitCode });
-      });
-    });
+    return RunProcess(this.ffprobePath, args, timeoutMsOverride ?? this.timeoutMs, this.logger);
   }
 }

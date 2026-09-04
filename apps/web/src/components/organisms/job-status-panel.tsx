@@ -3,6 +3,7 @@
 import type { JobDto } from '@clipper/shared';
 import { StatusBadge } from '@/components/atoms/badge';
 import { ProgressBar } from '@/components/atoms/progress-bar';
+import { Spinner } from '@/components/atoms/spinner';
 import { Button } from '@/components/atoms/button';
 import { JobsService } from '@/services/jobs.service';
 
@@ -18,6 +19,13 @@ export function JobStatusPanel({ job }: { job: JobDto }): JSX.Element {
         </div>
         <StatusBadge status={job.status} />
       </div>
+
+      {job.status === 'downloading' && (
+        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+          <Spinner />
+          <span>Downloading source video - this can take a while for longer videos.</span>
+        </div>
+      )}
 
       {job.status === 'processing' && (
         <div className="mt-4">

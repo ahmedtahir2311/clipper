@@ -11,7 +11,7 @@ async function Bootstrap(): Promise<void> {
   const cleanupProducer = app.get(CleanupProducer);
   await cleanupProducer.ScheduleRepeatable();
 
-  logger.log('Worker process started - listening for clip-generation and storage-cleanup jobs');
+  logger.log('Worker process started - listening for source-download, clip-generation, and storage-cleanup jobs');
 
   const shutdown = async (): Promise<void> => {
     logger.log('Shutting down worker...');

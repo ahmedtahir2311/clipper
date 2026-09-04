@@ -104,6 +104,8 @@ export class JobsService {
     switch (status) {
       case 'pending':
         return 'Queued';
+      case 'downloading':
+        return 'Downloading video...';
       case 'processing':
         return total > 0 ? `Generating clip ${current}/${total}` : 'Analyzing video...';
       case 'completed':

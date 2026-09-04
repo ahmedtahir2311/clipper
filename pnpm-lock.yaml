@@ -213,6 +213,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^20.16.11
+        version: 20.19.43
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.11.0
         version: 8.69.0(@typescript-eslint/parser@8.69.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)

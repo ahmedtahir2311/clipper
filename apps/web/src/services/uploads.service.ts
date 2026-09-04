@@ -10,6 +10,10 @@ interface CompleteUploadResponse {
   jobId: string;
 }
 
+interface ImportFromUrlResponse {
+  jobId: string;
+}
+
 export interface UploadProgress {
   chunkIndex: number;
   totalChunks: number;
@@ -48,5 +52,13 @@ export class UploadsService {
     }
 
     return completeResponse.data.data.jobId;
+  }
+
+  static async ImportFromUrl(url: string): Promise<string> {
+    const response = await apiClient.post<ApiResponseBody<ImportFromUrlResponse>>('/uploads/from-url', { url });
+    if (!response.data.success || !response.data.data) {
+      throw new Error(response.data.success ? 'Failed to start import' : response.data.error.message);
+    }
+    return response.data.data.jobId;
   }
 }
