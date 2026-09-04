@@ -88,6 +88,7 @@ export class JobsService {
       // prefix on the frontend (see apps/web/src/config/constants.ts) - do
       // not prefix with /api/v1 here or clients double it up.
       downloadUrl: `/clips/${clip.id}/download`,
+      streamUrl: `/clips/${clip.id}/stream`,
       thumbnailUrl: clip.thumbnailPath ? `/clips/${clip.id}/thumbnail` : null,
       createdAt: clip.createdAt,
     };

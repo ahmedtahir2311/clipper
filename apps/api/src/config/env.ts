@@ -30,7 +30,7 @@ const EnvSchema = z.object({
   CLEANUP_CRON: z.string().default('0 3 * * *'),
 
   YT_DLP_PATH: z.string().default('yt-dlp'),
-  YT_DLP_METADATA_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  YT_DLP_METADATA_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
   YT_DLP_DOWNLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(1_800_000),
   YOUTUBE_IMPORT_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(7200),
 });

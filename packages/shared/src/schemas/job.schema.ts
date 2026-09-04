@@ -11,6 +11,7 @@ export const ClipDtoSchema = z.object({
   endTime: z.number(),
   durationSeconds: z.number(),
   downloadUrl: z.string(),
+  streamUrl: z.string(),
   thumbnailUrl: z.string().nullable(),
   createdAt: z.string(),
 });

@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm, stat, unlink } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path';
-import type { StorageDriver, StorageWriteResult } from './storage.interface';
+import type { ReadStreamRange, StorageDriver, StorageWriteResult } from './storage.interface';
 
 @Injectable()
 export class LocalStorageDriver implements StorageDriver {
@@ -52,8 +52,11 @@ export class LocalStorageDriver implements StorageDriver {
     return readFile(this.GetAbsolutePath(relativePath));
   }
 
-  ReadStream(relativePath: string): Readable {
-    return createReadStream(this.GetAbsolutePath(relativePath));
+  ReadStream(relativePath: string, range?: ReadStreamRange): Readable {
+    if (!range) {
+      return createReadStream(this.GetAbsolutePath(relativePath));
+    }
+    return createReadStream(this.GetAbsolutePath(relativePath), { start: range.start, end: range.end });
   }
 
   async Move(fromRelativePath: string, toRelativePath: string): Promise<void> {

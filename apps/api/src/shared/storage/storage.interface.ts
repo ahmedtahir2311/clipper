@@ -5,6 +5,11 @@ export interface StorageWriteResult {
   bytesWritten: number;
 }
 
+export interface ReadStreamRange {
+  start: number;
+  end: number;
+}
+
 /**
  * Storage abstraction so the local filesystem driver used in MVP1 can be
  * swapped for an S3/R2 driver later without touching call sites.
@@ -13,7 +18,8 @@ export interface StorageDriver {
   WriteFile(relativePath: string, data: Buffer): Promise<StorageWriteResult>;
   AppendFile(relativePath: string, data: Buffer): Promise<StorageWriteResult>;
   ReadFile(relativePath: string): Promise<Buffer>;
-  ReadStream(relativePath: string): Readable;
+  /** `range` (inclusive byte offsets) enables HTTP Range support for video scrubbing - omit for the whole file. */
+  ReadStream(relativePath: string, range?: ReadStreamRange): Readable;
   Move(fromRelativePath: string, toRelativePath: string): Promise<void>;
   Delete(relativePath: string): Promise<void>;
   DeleteDirectory(relativePath: string): Promise<void>;
