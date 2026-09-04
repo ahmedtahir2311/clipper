@@ -11,28 +11,28 @@ export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 
   @Post('initiate')
-  async Initiate(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async Initiate(@Body() body: unknown, @Res() res: Response): Promise<void> {
     const dto = InitiateUploadSchema.parse(body);
     const result = await this.uploadsService.InitiateUpload(dto);
     ApiResponse.Success(res, result, 'Upload initiated', 201);
   }
 
   @Post('from-url')
-  async ImportFromUrl(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async ImportFromUrl(@Body() body: unknown, @Res() res: Response): Promise<void> {
     const dto = ImportFromUrlSchema.parse(body);
     const result = await this.uploadsService.ImportFromUrl(dto);
     ApiResponse.Success(res, result, 'Import started, downloading video', 201);
   }
 
   @Get(':uploadId/status')
-  async GetStatus(@Param() params: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async GetStatus(@Param() params: unknown, @Res() res: Response): Promise<void> {
     const { uploadId } = UploadIdParamSchema.parse(params);
     const meta = await this.uploadsService.GetStatus(uploadId);
     ApiResponse.Success(res, meta, 'Upload status retrieved');
   }
 
   @Post(':uploadId/chunks/:chunkIndex')
-  async WriteChunk(@Param() params: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async WriteChunk(@Param() params: unknown, @Req() req: Request, @Res() res: Response): Promise<void> {
     const { uploadId, chunkIndex } = UploadChunkParamsSchema.parse(params);
 
     if (!Buffer.isBuffer(req.body)) {
@@ -44,7 +44,7 @@ export class UploadsController {
   }
 
   @Post(':uploadId/complete')
-  async Complete(@Param() params: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async Complete(@Param() params: unknown, @Res() res: Response): Promise<void> {
     const { uploadId } = UploadIdParamSchema.parse(params);
     const result = await this.uploadsService.CompleteUpload(uploadId);
     ApiResponse.Success(res, result, 'Upload complete, processing started', 201);

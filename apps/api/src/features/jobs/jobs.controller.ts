@@ -9,13 +9,13 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Get()
-  async List(@Res({ passthrough: true }) res: Response): Promise<void> {
+  async List(@Res() res: Response): Promise<void> {
     const list = await this.jobsService.ListJobs();
     ApiResponse.Success(res, list, 'Jobs retrieved');
   }
 
   @Get(':id')
-  async GetOne(@Param() params: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async GetOne(@Param() params: unknown, @Res() res: Response): Promise<void> {
     const { id } = JobIdParamSchema.parse(params);
     const job = await this.jobsService.GetJob(id);
     ApiResponse.Success(res, job, 'Job retrieved');
@@ -29,7 +29,7 @@ export class JobsController {
 
   @Delete(':id')
   @HttpCode(200)
-  async Delete(@Param() params: unknown, @Res({ passthrough: true }) res: Response): Promise<void> {
+  async Delete(@Param() params: unknown, @Res() res: Response): Promise<void> {
     const { id } = JobIdParamSchema.parse(params);
     await this.jobsService.DeleteJob(id);
     ApiResponse.Success(res, null, 'Job deleted');
