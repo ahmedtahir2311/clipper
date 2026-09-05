@@ -75,4 +75,70 @@ describe('BuildAssSubtitle', () => {
     expect(ass).toContain('[Events]');
     expect(ass.split('\n').filter((line) => line.startsWith('Dialogue:'))).toHaveLength(0);
   });
+
+  it('emits per-word \\alpha fade tags for fade-word whose cumulative offsets never exceed the segment duration', () => {
+    const segments: CaptionSegment[] = [{ text: 'one two three', startTime: 0, endTime: 3 }];
+    const ass = BuildAssSubtitle('fade-word', segments);
+
+    const startTimes = [...ass.matchAll(/\\t\((\d+),(\d+),\\alpha&H00&\)/g)].map((m) => Number(m[1]));
+    expect(startTimes).toHaveLength(3);
+    expect(startTimes[0]).toBe(0);
+    // Later words start later - offsets are strictly increasing.
+    expect(startTimes[1]).toBeGreaterThan(startTimes[0]);
+    expect(startTimes[2]).toBeGreaterThan(startTimes[1]);
+    expect(startTimes[startTimes.length - 1]).toBeLessThan(3000); // all within the 3s = 3000ms segment
+  });
+
+  it('emits a scale-up-then-settle \\t transform for bold-pop', () => {
+    const segments: CaptionSegment[] = [{ text: 'punchy', startTime: 0, endTime: 2 }];
+    const ass = BuildAssSubtitle('bold-pop', segments);
+
+    expect(ass).toContain('{\\t(0,150,\\fscx120\\fscy120)\\t(150,300,\\fscx100\\fscy100)}punchy');
+  });
+
+  it('emits a grow-from-small \\t transform for grow-in', () => {
+    const segments: CaptionSegment[] = [{ text: 'growing', startTime: 0, endTime: 2 }];
+    const ass = BuildAssSubtitle('grow-in', segments);
+
+    expect(ass).toContain('{\\fscx10\\fscy10\\t(0,250,\\fscx100\\fscy100)}growing');
+  });
+
+  it('emits a \\blur tag for neon-glow', () => {
+    const segments: CaptionSegment[] = [{ text: 'glowing', startTime: 0, endTime: 2 }];
+    const ass = BuildAssSubtitle('neon-glow', segments);
+
+    expect(ass).toContain('{\\blur2}glowing');
+  });
+
+  it('emits plain text for soft-backdrop (styling is entirely in the Style line, not per-dialogue tags)', () => {
+    const segments: CaptionSegment[] = [{ text: 'backdrop text', startTime: 0, endTime: 2 }];
+    const ass = BuildAssSubtitle('soft-backdrop', segments);
+
+    expect(ass).toContain(',,backdrop text');
+  });
+
+  it('defines a well-formed 22-field [V4+ Styles] line for every caption style', () => {
+    // grow-in/fade-word/simple intentionally share a plain base Style line -
+    // their look comes entirely from per-dialogue override tags (covered by
+    // their own tests above) - so this only checks structural validity, not
+    // that every style's Style line is unique.
+    const styles = ['simple', 'karaoke', 'highlighter-box', 'bold-pop', 'soft-backdrop', 'neon-glow', 'grow-in', 'fade-word'] as const;
+    const segments: CaptionSegment[] = [{ text: 'x', startTime: 0, endTime: 1 }];
+
+    for (const style of styles) {
+      const styleLine = BuildAssSubtitle(style, segments)
+        .split('\n')
+        .find((l) => l.startsWith('Style: Default,'));
+      expect(styleLine).toBeDefined();
+      expect(styleLine!.replace('Style: Default,', '').split(',')).toHaveLength(22);
+    }
+  });
+
+  it('gives at least the animation-differentiated styles (karaoke, highlighter-box, bold-pop, soft-backdrop, neon-glow) their own distinct Style line', () => {
+    const styles = ['simple', 'karaoke', 'highlighter-box', 'bold-pop', 'soft-backdrop', 'neon-glow'] as const;
+    const segments: CaptionSegment[] = [{ text: 'x', startTime: 0, endTime: 1 }];
+
+    const styleLines = new Set(styles.map((style) => BuildAssSubtitle(style, segments).split('\n').find((l) => l.startsWith('Style:'))));
+    expect(styleLines.size).toBe(styles.length);
+  });
 });

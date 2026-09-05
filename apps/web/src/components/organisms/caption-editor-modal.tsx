@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CaptionStyle, ClipDto } from '@clipper/shared';
-import { CAPTION_STYLE_LABELS } from '@clipper/shared';
+import { CAPTION_STYLE_LABELS, CAPTION_STYLE_SWATCHES } from '@clipper/shared';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { ClipsService } from '@/services/clips.service';
@@ -21,7 +21,16 @@ interface SegmentInput {
   endTime: string;
 }
 
-const CAPTION_STYLES: CaptionStyle[] = ['simple', 'karaoke', 'highlighter-box'];
+const CAPTION_STYLES: CaptionStyle[] = [
+  'simple',
+  'karaoke',
+  'highlighter-box',
+  'bold-pop',
+  'soft-backdrop',
+  'neon-glow',
+  'grow-in',
+  'fade-word',
+];
 
 function DefaultSegment(clip: ClipDto): SegmentInput {
   return { text: '', startTime: '0', endTime: String(Math.min(3, clip.durationSeconds)) };
@@ -86,7 +95,7 @@ export function CaptionEditorModal({ clip, jobId, onClose }: CaptionEditorModalP
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -99,18 +108,22 @@ export function CaptionEditorModal({ clip, jobId, onClose }: CaptionEditorModalP
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <p className="mb-2 text-sm font-medium text-gray-700">Style</p>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {CAPTION_STYLES.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setStyle(s)}
                   className={cn(
-                    'flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                    'flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
                     style === s ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   )}
                 >
-                  {CAPTION_STYLE_LABELS[s]}
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-black/10"
+                    style={{ backgroundColor: CAPTION_STYLE_SWATCHES[s] }}
+                  />
+                  <span className="truncate">{CAPTION_STYLE_LABELS[s]}</span>
                 </button>
               ))}
             </div>
