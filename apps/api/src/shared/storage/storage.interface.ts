@@ -11,7 +11,7 @@ export interface ReadStreamRange {
 }
 
 /**
- * Storage abstraction so the local filesystem driver used in MVP1 can be
+ * Storage abstraction so the local filesystem driver used today can be
  * swapped for an S3/R2 driver later without touching call sites.
  */
 export interface StorageDriver {

@@ -1,17 +1,33 @@
-# Auto-Clip Generator (MVP1)
+# Clipper
 
-Upload a long-form video - or import one from a YouTube URL - and get back 7-10 short
-vertical (9:16) clips picked with classical audio signal processing (ffmpeg
-`silencedetect`) - no AI/ML models involved. Preview and download the clips manually;
-there's no auto-posting or scheduling in this phase.
+Turn a long-form video into a set of short vertical (9:16) clips, ready for Reels,
+TikTok, and Shorts. Clip boundaries are picked with classical audio signal processing
+(ffmpeg `silencedetect` - low-energy points in the audio track), not transcription or
+any machine-learned model. Add burned-in captions from one of eight display templates,
+preview and download the clips - there's no auto-posting or scheduling.
 
-This is an **internal tool**: there's no login and no database. It's meant to run on a
-private network / VPN / localhost, not to be exposed publicly - it has no access control
-of any kind, and it processes unreleased video content.
+This is a self-hosted, single-user tool: there's no login and no database. Run it on a
+private network, a VPN, or your own machine - it has no access control of any kind, and
+it's meant to process content you haven't published yet.
 
 > **YouTube import is for your own content.** Only paste a URL for a video you own or
 > otherwise have the rights to clip - downloading someone else's video may violate
 > YouTube's Terms of Service depending on how the clips are used.
+
+## Features
+
+- **Upload or import** - drag in a video file (chunked upload, resumable, up to a few
+  GB) or paste a `youtube.com`/`youtu.be` URL
+- **Automatic clip selection** - silence-boundary detection picks 7-10 clip windows per
+  video, snapped to natural pauses instead of cutting mid-word
+- **9:16 reframing** - center-crop for landscape sources, scale+pad for sources that are
+  already vertical
+- **Captions** - type your own lines and rough timing, pick a display template, burn it
+  into a separate output file
+- **Preview in-browser** - real `<video>` playback with seek support, not just a
+  thumbnail and a download link
+- **Zero external dependencies beyond Redis** - job/clip metadata lives in JSON files on
+  disk; there's no database to run or migrate
 
 ## Stack
 
@@ -50,16 +66,16 @@ have to scan every job. There's no locking between the HTTP process and the work
 process, which is safe here because only the HTTP process creates/deletes jobs and only
 the worker (at BullMQ concurrency 1) updates a job while it owns it - the two never
 write the same job concurrently. This trades multi-writer safety and query power for
-zero ops overhead, which is the right trade for a single-user internal tool; it would
-need revisiting before this became a shared multi-user service.
+zero ops overhead, which is the right trade for a single-user tool; it would need
+revisiting before this became a shared multi-user service.
 
 ## No auth
 
 There's no login, no session, no user table. Every API route is open to whoever can
 reach the API process - access control is "don't expose this to the internet," not
 anything the app enforces itself. If you ever need to put this behind something other
-than a private network (a shared office server, a tunnel, etc.), put a reverse proxy
-with its own auth in front of it rather than exposing the API directly.
+than a private network (a shared server, a tunnel, etc.), put a reverse proxy with its
+own auth in front of it rather than exposing the API directly.
 
 ## Prerequisites
 
@@ -69,10 +85,14 @@ with its own auth in front of it rather than exposing the API directly.
 - `ffmpeg` and `ffprobe` on your `PATH` (the worker shells out to them directly). Needs
   libass support for captions - standard distro/Homebrew builds have it; check with
   `ffmpeg -filters | grep ass`
-- `yt-dlp` on your `PATH`, only if you want the YouTube URL import feature
-  (`pip install yt-dlp`, or download the standalone binary from the
-  [yt-dlp releases page](https://github.com/yt-dlp/yt-dlp/releases) - it also needs
-  `ffmpeg` on `PATH` to merge separate video/audio streams, which you already have above)
+- `yt-dlp` on your `PATH`, only if you want the YouTube URL import feature. Prefer the
+  self-updating standalone binary over your distro's package - YouTube changes its
+  signature/token verification often enough that packaged builds go stale quickly:
+  ```bash
+  sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+  sudo chmod a+rx /usr/local/bin/yt-dlp
+  yt-dlp -U   # self-update anytime after this
+  ```
 
 ## Setup
 
@@ -108,6 +128,11 @@ Environment variables are only loaded by `apps/api` (both entrypoints) - see
 `.env.example` for the full list with defaults. Copy it to `apps/api/.env` as well if you
 run `apps/api` outside the root `pnpm dev` orchestration (e.g. `pnpm --filter @clipper/api run dev`
 from a shell that doesn't already have the root `.env` exported).
+
+For a production-style run: `pnpm build` (builds `packages/shared`, then `apps/api` and
+`apps/web`), then run `apps/api`'s `start`/`start:worker` scripts and `apps/web`'s
+`start` script as three long-running processes behind whatever process manager/reverse
+proxy you'd normally use.
 
 ## How a video becomes clips
 
@@ -159,16 +184,26 @@ alternative entry point into the same pipeline:
 Job status is `pending -> downloading -> processing -> completed | failed` for a URL
 import, vs. `pending -> processing -> completed | failed` for a direct file upload.
 
+If a download fails with `HTTP Error 403: Forbidden` after metadata fetched fine, that's
+almost always a stale `yt-dlp` build (see Prerequisites above) - YouTube's video-serving
+verification changes often enough that older `yt-dlp` versions stop being able to
+download (though they can still read metadata) until you update.
+
 ## Captions
 
 There's no speech-to-text/transcription anywhere in this app - you type the caption
-lines and rough start/end times yourself, and pick one of three display templates:
+lines and rough start/end times yourself, and pick one of eight display templates:
 
 | Style | Look |
 |---|---|
 | `simple` | Plain bold white text, black outline, no background |
-| `karaoke` | Words highlight one at a time - evenly spaced across the line's declared duration, not audio-synced (there's no ASR to sync to) |
+| `karaoke` | Words highlight one at a time - split proportionally by word length across the line's declared duration, not audio-synced (there's no transcription to sync to) |
 | `highlighter-box` | Each line appears on a solid highlighter-colored box |
+| `bold-pop` | Larger, heavier text that pops in with a quick scale bounce |
+| `soft-backdrop` | Text over a soft, semi-transparent bar - a wider, gentler background than the highlighter box |
+| `neon-glow` | Vivid color with a soft blur/glow around the text |
+| `grow-in` | Text grows from small to full size as each line appears |
+| `fade-word` | Like karaoke's word-by-word timing, but each word fades in instead of color-highlighting |
 
 `POST /clips/:id/captions` (`{ style, segments: [{ text, startTime, endTime }] }`) enqueues
 a `caption-burn` BullMQ job (its own queue, same async-never-blocks-HTTP pattern as clip
@@ -176,10 +211,11 @@ generation) that:
 
 1. Builds an `.ass` subtitle file from the segments
    (`apps/api/src/shared/ffmpeg/ass-subtitle-builder.ts`, pure function, unit-tested in
-   `apps/api/test/ass-subtitle-builder.spec.ts`) - karaoke timing splits each line's
-   duration across its words proportionally to word length. libass's native `\k`
-   karaoke tags and box-style (`BorderStyle=3`) rendering do the actual per-style
-   visual work; nothing here hand-rolls timed `drawtext` filters.
+   `apps/api/test/ass-subtitle-builder.spec.ts`). The word-by-word styles (`karaoke`,
+   `fade-word`) split each line's duration across its words proportionally to word
+   length. libass's native `\k` karaoke tags, box-style (`BorderStyle=3`) rendering,
+   `\blur` glow, and `\t` scale/fade transforms do the actual per-style visual work -
+   nothing here hand-rolls timed `drawtext` filters.
 2. Burns it in via `ffmpeg -vf ass=<file>` onto a **separate** output
    (`clip-N-captioned.mp4`) - the original clip is never touched, so captions can be
    changed or removed without re-running clip generation.
@@ -232,7 +268,8 @@ one file to replace.
 
 The worker registers a repeatable BullMQ job (`CLEANUP_CRON`, default daily at 03:00) that
 deletes any job (and its clips) older than `CLEANUP_RETENTION_DAYS` (default 7), including
-its files on disk. You can also delete a job on demand via `DELETE /jobs/:id`.
+its files on disk. You can also delete a job on demand from the job's page in the UI, or
+via `DELETE /jobs/:id`.
 
 ## Testing
 
@@ -248,10 +285,10 @@ pnpm test
 - `apps/api/test/job-store.spec.ts` exercises the JSON-file job/clip store against a real
   temp directory on disk (create, update, add clips, list ordering, delete cascading to
   the clips index, not-found handling) without mocking the filesystem.
-- `apps/api/test/ass-subtitle-builder.spec.ts` covers the caption-style ASS generation:
-  timestamp formatting, escaping (so caption text can never inject ASS override tags),
-  karaoke `\k` timing summing to the segment duration and weighting by word length, and
-  plain output for the non-karaoke styles.
+- `apps/api/test/ass-subtitle-builder.spec.ts` covers the caption-style ASS generation
+  for all eight styles: timestamp formatting, escaping (so caption text can never inject
+  ASS override tags), karaoke/fade-word timing summing to the segment duration and
+  weighting by word length, and the transform tags each animated style emits.
 
 ## API summary
 
@@ -276,9 +313,20 @@ pnpm test
 All routes are prefixed with `/api/v1`. None of them require authentication - see
 [No auth](#no-auth) above.
 
-## Explicitly out of scope (MVP1)
+## Not supported
 
 Auto-posting/scheduling to any platform, manual crop-region selection, multi-user
 roles/auth, cloud storage (the interface supports it, but only the local driver is
 implemented), and importing from anything other than YouTube (no generic yt-dlp
 site-support surface is exposed - only `youtube.com`/`youtu.be` URLs are accepted).
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a PR: `pnpm typecheck && pnpm test
+&& pnpm lint` should all pass, and any change to the clip-selection or caption-styling
+logic should come with a test in the relevant `*.spec.ts` file (both are pure functions,
+no ffmpeg or filesystem access needed to test them).
+
+## License
+
+[MIT](./LICENSE)

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { DashboardLayout } from '@/components/templates/dashboard-layout';
 import { JobStatusPanel } from '@/components/organisms/job-status-panel';
 import { ClipsGrid } from '@/components/organisms/clips-grid';
@@ -31,10 +32,19 @@ export default function JobDetailPage({ params }: { params: { id: string } }): J
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+          ← Back to dashboard
+        </Link>
+
         <JobStatusPanel job={job} />
+
         {job.status === 'completed' && (
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Clips</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Clips {job.clips && job.clips.length > 0 ? `(${job.clips.length})` : ''}
+              </h2>
+            </div>
             <ClipsGrid clips={job.clips ?? []} />
           </section>
         )}

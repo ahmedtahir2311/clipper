@@ -10,6 +10,32 @@ import { ClipsService } from '@/services/clips.service';
 import { FormatDuration } from '@/lib/utils';
 import { API_BASE_URL } from '@/config/constants';
 
+function CaptionStatusChip({ clip }: { clip: ClipDto }): JSX.Element | null {
+  switch (clip.captionStatus) {
+    case 'pending':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
+          Burning
+        </span>
+      );
+    case 'ready':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+          ✓ Captioned
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+          Caption failed
+        </span>
+      );
+    default:
+      return null;
+  }
+}
+
 export function ClipCard({ clip }: { clip: ClipDto }): JSX.Element {
   const queryClient = useQueryClient();
   const [preview, setPreview] = useState<{ streamUrl: string; label: string } | null>(null);
@@ -27,7 +53,7 @@ export function ClipCard({ clip }: { clip: ClipDto }): JSX.Element {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       <button
         type="button"
         onClick={() => setPreview({ streamUrl: clip.streamUrl, label: `Preview of clip ${clip.sequence}` })}
@@ -40,48 +66,46 @@ export function ClipCard({ clip }: { clip: ClipDto }): JSX.Element {
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-gray-400">No preview</div>
         )}
+
+        <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">#{clip.sequence}</span>
+        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
+          {FormatDuration(clip.durationSeconds)}
+        </span>
+
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-brand-700 opacity-0 transition-opacity group-hover:opacity-100">
             ▶
           </span>
         </div>
-        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
-          {FormatDuration(clip.durationSeconds)}
-        </span>
       </button>
 
       <div className="space-y-2 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Clip {clip.sequence}</span>
-          <a href={`${API_BASE_URL}${clip.downloadUrl}`} download>
+        <div className="flex items-center justify-between gap-2">
+          <CaptionStatusChip clip={clip} />
+          <a href={`${API_BASE_URL}${clip.downloadUrl}`} download className="ml-auto">
             <Button size="sm" variant="secondary">
               Download
             </Button>
           </a>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+        <div className="border-t border-gray-100 pt-2">
           {clip.captionStatus === 'none' && (
             <Button size="sm" variant="ghost" className="w-full" onClick={() => setIsEditingCaptions(true)}>
               + Add captions
             </Button>
           )}
 
-          {clip.captionStatus === 'pending' && (
-            <span className="flex w-full items-center justify-center gap-1.5 text-xs text-gray-500">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
-              Burning captions...
-            </span>
-          )}
+          {clip.captionStatus === 'pending' && <p className="text-center text-xs text-gray-400">This can take a few seconds...</p>}
 
           {clip.captionStatus === 'ready' && clip.captionedStreamUrl && clip.captionedDownloadUrl && (
-            <div className="flex w-full items-center justify-between gap-1">
+            <div className="flex items-center justify-between gap-1">
               <button
                 type="button"
                 onClick={() => setPreview({ streamUrl: clip.captionedStreamUrl!, label: `Captioned preview of clip ${clip.sequence}` })}
                 className="text-xs font-medium text-brand-700 hover:underline"
               >
-                ✓ Preview captioned
+                Preview
               </button>
               <div className="flex gap-1">
                 <a href={`${API_BASE_URL}${clip.captionedDownloadUrl}`} download>
@@ -97,9 +121,9 @@ export function ClipCard({ clip }: { clip: ClipDto }): JSX.Element {
           )}
 
           {clip.captionStatus === 'failed' && (
-            <div className="w-full">
-              <p className="text-xs text-red-500">Caption burn failed{clip.captionError ? `: ${clip.captionError}` : ''}</p>
-              <Button size="sm" variant="ghost" className="mt-1 w-full" onClick={() => setIsEditingCaptions(true)}>
+            <div>
+              {clip.captionError && <p className="mb-1 truncate text-xs text-red-500" title={clip.captionError}>{clip.captionError}</p>}
+              <Button size="sm" variant="ghost" className="w-full" onClick={() => setIsEditingCaptions(true)}>
                 Try again
               </Button>
             </div>

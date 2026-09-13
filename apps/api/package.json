@@ -1,7 +1,8 @@
 {
   "name": "@clipper/api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently -n api,worker -c blue,magenta \"npm:dev:api\" \"npm:dev:worker\"",
     "dev:api": "nest start --watch",

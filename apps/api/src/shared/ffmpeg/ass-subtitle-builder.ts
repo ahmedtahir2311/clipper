@@ -18,7 +18,19 @@ const STYLE_DEFS: Record<CaptionStyle, AssStyleDef> = {
   karaoke: { line: 'Arial,64,&H0000FFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,60,60,180,1' },
   // BorderStyle=3 renders an opaque box using BackColour instead of an outline.
   'highlighter-box': { line: 'Arial,64,&H00000000,&H00000000,&H00000000,&H0000FF00,1,0,0,0,100,100,0,0,3,0,0,2,60,60,180,1' },
+  // Bigger/heavier text; the pop-in scale bounce comes from a per-line \t transform, not the style itself.
+  'bold-pop': { line: 'Arial,72,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,4,0,2,60,60,180,1' },
+  // BorderStyle=3 box with a semi-transparent (not fully opaque) BackColour and extra outline padding for a soft, wide bar look.
+  'soft-backdrop': { line: 'Arial,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,1,0,0,0,100,100,0,0,3,14,0,2,60,60,180,1' },
+  // Vivid cyan on a contrasting dark outline; the glow itself is a per-line \blur tag.
+  'neon-glow': { line: 'Arial,64,&H00FFFF00,&H00FFFF00,&H00802040,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,60,60,180,1' },
+  // Plain base style; the grow-from-small entrance comes from a per-line \t scale transform.
+  'grow-in': { line: 'Arial,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,60,60,180,1' },
+  // Plain base style; each word fades in via a per-word \alpha transform timed the same way karaoke times its \k tags.
+  'fade-word': { line: 'Arial,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,60,60,180,1' },
 };
+
+const WORD_FADE_DURATION_MS = 150;
 
 function FormatAssTime(seconds: number): string {
   const totalCentiseconds = Math.max(0, Math.round(seconds * 100));
@@ -37,9 +49,9 @@ function EscapeAssText(text: string): string {
 }
 
 /**
- * Splits karaoke timing across words proportionally to word length (longer
- * words get more highlight time), rounded to centiseconds with any rounding
- * drift folded into the last word so durations sum exactly.
+ * Splits timing across words proportionally to word length (longer words get
+ * more time), rounded to centiseconds with any rounding drift folded into
+ * the last word so durations sum exactly to the segment's duration.
  */
 function ComputeWordDurationsCentiseconds(words: string[], totalDurationSeconds: number): number[] {
   const totalChars = words.reduce((sum, word) => sum + word.length, 0) || 1;
@@ -52,18 +64,71 @@ function ComputeWordDurationsCentiseconds(words: string[], totalDurationSeconds:
   return durations;
 }
 
+/**
+ * Shared engine for the two per-word-timed styles (karaoke, fade-word): splits
+ * the segment into words with proportional durations, then lets the caller
+ * decide what ASS tag each word gets and at what cumulative offset.
+ */
+function BuildWordTimedText(
+  segment: CaptionSegment,
+  buildWordTag: (word: string, cumulativeCentiseconds: number, durationCentiseconds: number) => string
+): string {
+  const words = segment.text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) {
+    return '';
+  }
+
+  const durations = ComputeWordDurationsCentiseconds(words, segment.endTime - segment.startTime);
+  let cumulative = 0;
+  const parts: string[] = [];
+  for (let i = 0; i < words.length; i += 1) {
+    parts.push(buildWordTag(words[i], cumulative, durations[i]));
+    cumulative += durations[i];
+  }
+  return parts.join(' ');
+}
+
+function BuildKaraokeText(segment: CaptionSegment): string {
+  return BuildWordTimedText(segment, (word, _cumulativeCs, durationCs) => `{\\k${durationCs}}${EscapeAssText(word)}`);
+}
+
+function BuildFadeWordText(segment: CaptionSegment): string {
+  return BuildWordTimedText(segment, (word, cumulativeCs, durationCs) => {
+    const startMs = cumulativeCs * 10;
+    const fadeMs = Math.min(WORD_FADE_DURATION_MS, durationCs * 10);
+    return `{\\alpha&HFF&\\t(${startMs},${startMs + fadeMs},\\alpha&H00&)}${EscapeAssText(word)}`;
+  });
+}
+
+function BuildStyledText(segment: CaptionSegment, style: CaptionStyle): string {
+  switch (style) {
+    case 'karaoke':
+      return BuildKaraokeText(segment);
+    case 'fade-word':
+      return BuildFadeWordText(segment);
+    case 'bold-pop':
+      // Scale up to 120% over the first 150ms, then settle back to 100% by 300ms - a quick punchy "pop".
+      return `{\\t(0,150,\\fscx120\\fscy120)\\t(150,300,\\fscx100\\fscy100)}${EscapeAssText(segment.text)}`;
+    case 'grow-in':
+      // Start at 10% scale and grow to 100% over the first 250ms.
+      return `{\\fscx10\\fscy10\\t(0,250,\\fscx100\\fscy100)}${EscapeAssText(segment.text)}`;
+    case 'neon-glow':
+      return `{\\blur2}${EscapeAssText(segment.text)}`;
+    case 'simple':
+    case 'highlighter-box':
+    case 'soft-backdrop':
+      return EscapeAssText(segment.text);
+    default: {
+      const exhaustiveCheck: never = style;
+      return exhaustiveCheck;
+    }
+  }
+}
+
 function BuildDialogueLine(segment: CaptionSegment, style: CaptionStyle): string {
   const start = FormatAssTime(segment.startTime);
   const end = FormatAssTime(segment.endTime);
-
-  let text: string;
-  if (style === 'karaoke') {
-    const words = segment.text.split(/\s+/).filter((w) => w.length > 0);
-    const durations = ComputeWordDurationsCentiseconds(words, segment.endTime - segment.startTime);
-    text = words.map((word, i) => `{\\k${durations[i]}}${EscapeAssText(word)}`).join(' ');
-  } else {
-    text = EscapeAssText(segment.text);
-  }
+  const text = BuildStyledText(segment, style);
 
   return `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`;
 }
